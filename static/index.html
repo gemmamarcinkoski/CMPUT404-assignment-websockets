@@ -51,20 +51,31 @@ function drawCircle(context,entity) {
         lineWidth = 3;
         var x = entity["x"];
         var y = entity["y"];
+	
+	for (var i=11; i!=0; i--){
+	    var r = entity["radius"]*(i%2+1)/2;
+	    var ang = ((2*Math.PI)/10*i); lineTo((r*Math.sin(ang))+x, (r*Math.cos(ang)) +y);
+	    }
+	closePath();
+	fillStyle = entity["colour"];
+	fill();
+	    
+	
+	
         //moveTo(x,y);
-        fillStyle = entity["colour"];
+        /*fillStyle = entity["colour"];
         strokeStyle = fillStyle;
         arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
-        stroke();                                
+        stroke();   */                             
     }
 }
 
 function prepEntity(entity) {
     if (!entity["colour"]) {
-        entity["colour"] = "#FF0000";
+        entity["colour"] = randColor();
     }
     if (!entity["radius"]) {
-        entity["radius"] = 50;
+        entity["radius"] = Math.floor(Math.random() * 71);
     }
     return entity;
 }
@@ -123,6 +134,9 @@ function getPosition(e) {
 
 function addEntity(entity, data) {
     world[entity] = data;
+    //sendJSONXMLHTTPRequest('/entity/'+ entity, data, function(data){});
+    // use sockets now
+    sockets.send(JSON.stringify(world));
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just modified!
 }
@@ -228,18 +242,27 @@ mouse = (function() {
     return self;
 })();
 
+//ref: http://www.paulirish.com/2009/random-hex-color-code-snippets/
+function randColor(){
+    return '#' + (function co(lor){   
+	return (lor +=[0,1,2,3,4,5,6,7,8,9,'a','b','c','d','e','f'][Math.floor(Math.random()*16)]) && (lor.length == 6) ?  lor : co(lor); })('');
+    }
+
 // Add the application specific mouse listeners!
 //XXX: TODO Make these prettier!
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
+    rco = randColor();
+    addEntityWithoutName({'x':x,'y':y,'colour':rco});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    rco = randColor();
+    addEntityWithoutName({'x':x,'y':y,'colour':rco});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
+    rco = randColor();
+    addEntityWithoutName({'x':x,'y':y,'colour':rco,
                           'radius':10});
 });
 
@@ -249,19 +272,51 @@ function update() {
 }
 
 
+function sendJSONXMLHTTPRequest(url, objects, callback) {
+    var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState==4) {
+                try {
+		    if (xhr.status==200) {
+		        parsed = JSON.parse(xhr.responseText);
+			callback(parsed);
+		    }
+		} 
+		catch(e) {
+		    alert('Error: ' + e.name);
+		}
+	    }
+	};
+    //GET
+    xhr.open('GET', url);
+    xhr.send(); 
+}
+
+
 function wsSetup() {
     var url = "ws://"+host+"/subscribe";   
     socket = new WebSocket(url);
     socket.onopen = function() {
         //XXX: TODO What are you going to do here?
+	sendJSONXMLHTTPRequest('/world', null, function (data){
+	    world = data;
+	    drawNextFrame();
+	    });
+    
     };
     socket.onerror = function(msg) {
         debug("WebSocket Error:" + msg.data);
     };
     socket.onmessage = function(msg) {  
         try {
-            debug("WebSocket Recv:" + msg.data);
-            //XXX: TODO What are you going to do here?            
+            //debug("WebSocket Recv:" + msg.data);
+            //XXX: TODO What are you going to do here? 
+	    var message = JSON.parse(msg.data);
+	    for (var key in message){
+	        data = message[key];
+		world[key = data];
+	    }
+	    drawNextFrame();
         } catch (e) {
             alert("socket on message: " + e);
         }

@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 import flask
-from flask import Flask, request
+from flask import Flask, request, redirect
 from flask_sockets import Sockets
 import gevent
 from gevent import queue
@@ -59,30 +59,76 @@ class World:
     def world(self):
         return self.space
 
-myWorld = World()        
+myWorld = World()    
+
+#code taken from: https://github.com/abramhindle/WebSocketsExamples/blob/master/chat.py
+clients = list()
+
+class Client:
+    def __init__(self):
+        self.queue = queue.Queue()
+    
+    def put(self, v):
+        self.queue.put_nowait(v)
+        
+    def get(self):
+        return self.queue.get()
 
 def set_listener( entity, data ):
     ''' do something with the update ! '''
+    # sending the update to all clienta
+    update = json.dumps({entity:data})
+    for client in clients:
+        client.put(update)
 
 myWorld.add_set_listener( set_listener )
         
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    return redirect("/static/index.html", code=302)
 
+#reference: https://github.com/abramhindle/WebSocketsExamples/blob/master/chat.py
+#READING THE WEBSOCKET
 def read_ws(ws,client):
     '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    try:
+        while True:
+            msg = ws.receive()
+            #print "WS RECV: %s" % msg
+            if (msg is not None):
+                packet = json.loads(msg)
+                entity = packet.keys()[0]
+                data = packet[entity]
+                #update world
+                #non websockets update - myWorld.set(entity, data)
+                #websockets must update all clients for update
+                for client in clients:
+                    client.put( json.dumps(packet) )    
+            else:
+                break
+    except:
+        '''done'''
 
+#reference: https://github.com/abramhindle/WebSocketsExamples/blob/master/chat.py
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
-    # XXX: TODO IMPLEMENT ME
-    return None
-
+    client = Client()
+    clients.append(client)
+    g = gevent.spawn(read_ws, ws, client)
+    #print "subscribing"
+    try:
+        while True:
+            msg = client.get()
+            #print "got a message"
+            ws.send(msg)
+    except Exception as e:#WebSocketError as e:
+        print "WS ERROR %s" % e
+    finally:
+        clients.remove(client)
+        gevent.kill(g)
 
 def flask_post_json():
     '''Ah the joys of frameworks! They do so much work for you
@@ -97,23 +143,28 @@ def flask_post_json():
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
     '''update the entities via this interface'''
-    return None
+    data = flask_post_json()
+    myWorld.set(entity, data)
+    updated_e = myWorld.get(entity)
+    return json.dumps(updated_e)
 
 @app.route("/world", methods=['POST','GET'])    
 def world():
     '''you should probably return the world here'''
-    return None
+    return json.dumps(myWorld.world())
 
 @app.route("/entity/<entity>")    
 def get_entity(entity):
     '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    e = myWorld.get(entity)
+    return json.dumps(e)
 
 
 @app.route("/clear", methods=['POST','GET'])
 def clear():
     '''Clear the world out!'''
-    return None
+    myWorld.clear()
+    return json.dumps(myWorld.world())
 
 
 
