@@ -54,7 +54,8 @@ function drawCircle(context,entity) {
 	
 	for (var i=11; i!=0; i--){
 	    var r = entity["radius"]*(i%2+1)/2;
-	    var ang = ((2*Math.PI)/10*i); lineTo((r*Math.sin(ang))+x, (r*Math.cos(ang)) +y);
+	    var ang = ((2*Math.PI)/10*i);
+      lineTo((r*Math.sin(ang))+x, (r*Math.cos(ang)) +y);
 	    }
 	closePath();
 	fillStyle = entity["colour"];
@@ -136,7 +137,7 @@ function addEntity(entity, data) {
     world[entity] = data;
     //sendJSONXMLHTTPRequest('/entity/'+ entity, data, function(data){});
     // use sockets now
-    sockets.send(JSON.stringify(world));
+    socket.send(JSON.stringify(world));
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just modified!
 }
@@ -314,7 +315,7 @@ function wsSetup() {
 	    var message = JSON.parse(msg.data);
 	    for (var key in message){
 	        data = message[key];
-		world[key = data];
+		      world[key] = data;
 	    }
 	    drawNextFrame();
         } catch (e) {
